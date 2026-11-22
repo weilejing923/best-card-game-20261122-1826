@@ -424,6 +424,26 @@ export function createRenderer(canvas) {
     }
   }
 
+  /**
+   * Cover art for the title screen: the two cards the whole game turns on —
+   * a Sun 9 Giant and a Moon 1 Spark — fanned against the panel's sides.
+   */
+  function drawCoverCards(state) {
+    const w = 132;
+    const h = 184;
+    const cy = 360;
+    ctx.save();
+    ctx.translate(212, cy);
+    ctx.rotate(-0.16);
+    cardFace({ sigil: 0, rank: 9 }, -w / 2, -h / 2, w, h, state.trump === 0);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(1068, cy);
+    ctx.rotate(0.16);
+    cardFace({ sigil: 1, rank: 1 }, -w / 2, -h / 2, w, h, state.trump === 1);
+    ctx.restore();
+  }
+
   function panel(title, lines, prompt, accent) {
     const w = 760;
     const h = 150 + lines.length * 36 + 70;
@@ -475,6 +495,7 @@ export function createRenderer(canvas) {
         'A Spark (1) fells a Giant (9). Win twice with one sigil for an ECHO +1.',
         `First to break all ${12} hearts wins the match.`,
       ], 'Click or press Enter to play', PALETTE.gem);
+      drawCoverCards(state);
     } else if (state.phase === PHASE_OVER) {
       const won = state.winner === 'player';
       panel(won ? 'VICTORY!' : 'DEFEAT', [
