@@ -215,6 +215,100 @@ export function createRenderer(canvas) {
     text(String(state.playerGems), 396, 486, 19, PALETTE.text, 'left', FONT_UI, 'bold');
   }
 
+  /** Vex herself: a crescent-moon trickster portrait in a gold medallion, crowned. */
+  function drawVexPortrait() {
+    const cx = 92;
+    const cy = 158;
+    const r = 45;
+    ctx.save();
+    // Little three-point crown above the medallion.
+    ctx.fillStyle = PALETTE.gem;
+    ctx.beginPath();
+    ctx.moveTo(cx - 20, cy - r - 2);
+    ctx.lineTo(cx - 20, cy - r - 16);
+    ctx.lineTo(cx - 10, cy - r - 6);
+    ctx.lineTo(cx, cy - r - 18);
+    ctx.lineTo(cx + 10, cy - r - 6);
+    ctx.lineTo(cx + 20, cy - r - 16);
+    ctx.lineTo(cx + 20, cy - r - 2);
+    ctx.closePath();
+    ctx.fill();
+    // Medallion: deep-violet disc in a gold ring.
+    const grad = ctx.createRadialGradient(cx - 12, cy - 14, 6, cx, cy, r);
+    grad.addColorStop(0, '#4b3577');
+    grad.addColorStop(1, '#221739');
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = PALETTE.gem;
+    ctx.stroke();
+    // Her crescent, with a sly closed eye and smirk on its lit face.
+    drawSigil(1, cx - 4, cy + 4, 26, '#d9cdf7');
+    ctx.strokeStyle = '#221739';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); // closed, amused eye
+    ctx.arc(cx + 2, cy - 2, 6, Math.PI * 1.15, Math.PI * 1.85);
+    ctx.stroke();
+    ctx.beginPath(); // smirk
+    ctx.arc(cx + 6, cy + 8, 7, Math.PI * 0.15, Math.PI * 0.75);
+    ctx.stroke();
+    // Two sparkles, because she is showing off.
+    for (const [sx, sy, sr] of [[cx + 26, cy - 24, 6], [cx - 28, cy + 22, 4.5]]) {
+      ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy - sr);
+      ctx.lineTo(sx + sr * 0.28, sy - sr * 0.28);
+      ctx.lineTo(sx + sr, sy);
+      ctx.lineTo(sx + sr * 0.28, sy + sr * 0.28);
+      ctx.lineTo(sx, sy + sr);
+      ctx.lineTo(sx - sr * 0.28, sy + sr * 0.28);
+      ctx.lineTo(sx - sr, sy);
+      ctx.lineTo(sx - sr * 0.28, sy - sr * 0.28);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+    text('VEX', cx, cy + r + 20, 13, PALETTE.gem, 'center', FONT, 'bold');
+  }
+
+  /**
+   * The Echo rule, made visible on the table: once a sigil has won a round,
+   * a little gold plaque says what winning with it again would pay.
+   */
+  /** The Echo plaque's wording for this frame, or null when no Echo is in play. */
+  function echoLabel(state) {
+    if (state.phase !== PHASE_CHOOSE && state.phase !== PHASE_REVEAL) return null;
+    if (state.lastSigil === null || state.streak < 1) return null;
+    const name = SIGILS[state.lastSigil].name;
+    if (state.phase === PHASE_CHOOSE) {
+      return `ECHO ARMED · ${name} won last round — win with ${name} again: +1 damage`;
+    }
+    if (state.playerPlayed && state.aiPlayed) {
+      const echoLive = state.playerPlayed.sigil === state.lastSigil || state.aiPlayed.sigil === state.lastSigil;
+      if (echoLive) return `ECHO LIVE · a ${name} win pays +1 damage`;
+    }
+    return null;
+  }
+
+  function drawEchoChip(state) {
+    const label = echoLabel(state);
+    if (!label) return;
+    ctx.save();
+    ctx.font = `600 14px ${FONT_UI}`;
+    const w = ctx.measureText(label).width + 28;
+    roundRect(640 - w / 2, 484, w, 30, 15);
+    ctx.fillStyle = 'rgba(13,21,36,0.88)';
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = PALETTE.gem;
+    ctx.stroke();
+    text(label, 640, 499, 14, PALETTE.gem, 'center', FONT_UI, '600');
+    ctx.restore();
+  }
+
   function drawTrumpAndPrize(state) {
     const trump = SIGILS[state.trump];
     ctx.beginPath();
@@ -359,13 +453,15 @@ export function createRenderer(canvas) {
     drawHud(state, ui.best);
     drawAiHand(state);
     drawTrumpAndPrize(state);
+    drawVexPortrait();
     drawDuel(state);
+    drawEchoChip(state);
     drawPlayerHand(state, state.phase === PHASE_CHOOSE ? ui.hover : -1);
     drawParticles(ui.dt || 0);
 
     if (state.phase === PHASE_CHOOSE) {
       text(resultLine(state), 640, 462, 21, PALETTE.text);
-      if (state.lastResult) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
+      if (state.lastResult && !echoLabel(state)) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
       text('Click a card — or press 1–5, left to right — to duel for the prize.', 640, 702, 16, PALETTE.muted);
     } else if (state.phase === PHASE_REVEAL) {
       text(state.revealT > 0.6 ? duelLine(state) : 'The cards are cast…', 640, 470, 21, PALETTE.text);

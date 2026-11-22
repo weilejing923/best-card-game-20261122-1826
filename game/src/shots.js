@@ -32,6 +32,7 @@ export function stageShot(name, world) {
     s.playerGems = 4;
     s.aiGems = 3;
     s.lastSigil = 1;
+    s.streak = 1; // Moon won the round before, so the Echo plaque is live
     s.playerPlayed = makeCard(1, 7);
     s.aiPlayed = makeCard(0, 9);
     s.playerHand = [makeCard(0, 3), makeCard(1, 2), makeCard(2, 9), makeCard(3, 5)];
