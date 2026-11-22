@@ -11,7 +11,7 @@
 //      first, the higher life wins, then the higher gem count.
 import { ECHO_BONUS, HAND_SIZE, RANK_MAX, RANK_MIN, START_LIFE } from './config.js';
 import { buildDeck, sortHand } from './deck.js';
-import { cardPower, chooseAiCard, vexQuip } from './ai.js';
+import { cardPower, vexQuip, vexTell } from './ai.js';
 import { randomInt } from './random.js';
 
 export const PHASE_TITLE = 'title';
@@ -54,7 +54,16 @@ export function createWorld(random) {
     winner: null,
     revealT: 0,
     wins: 0,
+    difficulty: 1, // 0 Calm · 1 Standard · 2 Ruthless — picked on the title screen
+    aiIntent: null, // the index of the card Vex committed to at round start
+    vexTell: null, // her table talk for this round (ai.js vexTell: ~70% honest)
+    vexClaim: null, // what she wants you to believe: 'strong' | 'weak'
   };
+
+  /** Set Vex's temper. Applies from the next round she commits to. */
+  function setDifficulty(d) {
+    if (d === 0 || d === 1 || d === 2) state.difficulty = d;
+  }
 
   function drawUp(hand) {
     while (hand.length < HAND_SIZE && state.deck.length > 0) hand.push(state.deck.pop());
@@ -86,6 +95,20 @@ export function createWorld(random) {
     state.aiPlayed = null;
     state.revealT = 0;
     state.phase = PHASE_CHOOSE;
+    // Vex commits to her card now, before you pick — the duel stays fair —
+    // and her table talk for the round is set (see ai.js vexTell).
+    const tell = vexTell(state.aiHand, {
+      prize: state.prize,
+      trump: state.trump,
+      lastSigil: state.lastSigil,
+      aiLife: state.aiLife,
+      playerLife: state.playerLife,
+      random,
+      difficulty: state.difficulty,
+    });
+    state.aiIntent = tell.index;
+    state.vexTell = tell.line;
+    state.vexClaim = tell.claim;
   }
 
   function finishIfOver() {
@@ -107,20 +130,16 @@ export function createWorld(random) {
     if (state.winner === 'player') state.wins += 1;
   }
 
-  /** The player commits the card at `index` of their hand; Vex answers at once. */
+  /** The player commits the card at `index` of their hand; Vex's pre-committed card answers. */
   function playCard(index) {
     if (state.phase !== PHASE_CHOOSE) return null;
     if (index < 0 || index >= state.playerHand.length) return null;
-    const aiIndex = chooseAiCard(state.aiHand, {
-      prize: state.prize,
-      trump: state.trump,
-      lastSigil: state.lastSigil,
-      aiLife: state.aiLife,
-      playerLife: state.playerLife,
-      random,
-    });
+    const aiIndex = state.aiIntent !== null && state.aiIntent < state.aiHand.length
+      ? state.aiIntent
+      : 0;
     state.playerPlayed = state.playerHand.splice(index, 1)[0];
     state.aiPlayed = state.aiHand.splice(aiIndex, 1)[0];
+    state.aiIntent = null;
     state.revealT = 0;
     state.phase = PHASE_REVEAL;
     return state.aiPlayed;
@@ -167,5 +186,5 @@ export function createWorld(random) {
     return state.lastResult;
   }
 
-  return { state, startMatch, playCard, settleReveal };
+  return { state, startMatch, playCard, settleReveal, setDifficulty };
 }

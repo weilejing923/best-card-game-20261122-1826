@@ -9,6 +9,7 @@ export function createInput(canvas, view) {
   let hover = -1;
   let pick = -1;
   let confirm = false;
+  let difficultyPick = -1;
 
   function toLogical(event) {
     const rect = canvas.getBoundingClientRect();
@@ -43,6 +44,9 @@ export function createInput(canvas, view) {
       event.preventDefault();
     } else if (/^Digit[1-5]$/.test(event.code)) {
       pick = Number(event.code.slice(5)) - 1;
+      // On the title screen, 1/2/3 also name a difficulty (Calm/Standard/Ruthless);
+      // main.js decides which meaning applies by phase.
+      if (pick <= 2) difficultyPick = pick;
     }
   });
 
@@ -68,6 +72,12 @@ export function createInput(canvas, view) {
     takeConfirm() {
       const taken = confirm;
       confirm = false;
+      return taken;
+    },
+    /** A pending difficulty choice 0/1/2 from keys 1/2/3, or -1 for none. */
+    takeDifficulty() {
+      const taken = difficultyPick;
+      difficultyPick = -1;
       return taken;
     },
   };

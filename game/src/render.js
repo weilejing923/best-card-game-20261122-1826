@@ -6,7 +6,7 @@ import {
   AI_HAND_LAYOUT, DUEL_LAYOUT, FIELD, FONT, FONT_UI, HAND_LAYOUT, PALETTE, SIGILS, handStartX,
 } from './config.js';
 import { PHASE_CHOOSE, PHASE_OVER, PHASE_REVEAL, PHASE_TITLE } from './world.js';
-import { cardPower } from './ai.js';
+import { cardPower, DIFFICULTY_LABELS } from './ai.js';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -481,7 +481,10 @@ export function createRenderer(canvas) {
 
     if (state.phase === PHASE_CHOOSE) {
       text(resultLine(state), 640, 462, 21, PALETTE.text);
-      if (state.lastResult && !echoLabel(state)) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
+      // Her table talk for THIS round outranks last round's quip: it is a tell
+      // about the card she has already committed to (about 70% honest).
+      if (state.vexTell) text(state.vexTell, 640, 490, 17, PALETTE.gem);
+      else if (state.lastResult && !echoLabel(state)) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
       text('Click a card — or press 1–5, left to right — to duel for the prize.', 640, 702, 16, PALETTE.muted);
     } else if (state.phase === PHASE_REVEAL) {
       text(state.revealT > 0.6 ? duelLine(state) : 'The cards are cast…', 640, 470, 21, PALETTE.text);
@@ -493,8 +496,9 @@ export function createRenderer(canvas) {
         'A duel of cards against Vex, the Moon Trickster.',
         'Beat her card to deal the prize as damage. Trump sigil: +10 power.',
         'A Spark (1) fells a Giant (9). Win twice with one sigil for an ECHO +1.',
+        'Her table talk is a tell — seven parts true, three parts bluff.',
         `First to break all ${12} hearts wins the match.`,
-      ], 'Click or press Enter to play', PALETTE.gem);
+      ], `Enter to play · Difficulty: ${DIFFICULTY_LABELS[state.difficulty ?? 1].toUpperCase()} — keys 1 · 2 · 3`, PALETTE.gem);
       drawCoverCards(state);
     } else if (state.phase === PHASE_OVER) {
       const won = state.winner === 'player';

@@ -101,6 +101,13 @@ function runGame() {
       }
     }
 
+    const difficultyPick = input.takeDifficulty();
+    if (s.phase === PHASE_TITLE && difficultyPick >= 0 && difficultyPick !== s.difficulty) {
+      world.setDifficulty(difficultyPick);
+      soundClick();
+      announce(`Difficulty: ${['Calm', 'Standard', 'Ruthless'][difficultyPick]}. Click or press Enter to play.`);
+    }
+
     const confirm = input.takeConfirm();
     if ((s.phase === PHASE_TITLE || s.phase === PHASE_OVER) && confirm) {
       startMatch();

@@ -18,11 +18,18 @@ function keepValue(card, trump, lastSigil) {
   return value;
 }
 
+/** The three Vexes: same trickster, different tempers. Picked on the title screen. */
+export const DIFFICULTY_LABELS = ['Calm', 'Standard', 'Ruthless'];
+
 /**
  * Pick the index of the card Vex plays.
- * ctx: { prize, trump, lastSigil, aiLife, playerLife, random }
+ * ctx: { prize, trump, lastSigil, aiLife, playerLife, random, difficulty }
+ * difficulty: 0 Calm (daydreaming — often plays at random), 1 Standard (the
+ * brain described above), 2 Ruthless (contests every real prize, swings
+ * earlier when behind, and almost never wastes a strong card).
  */
 export function chooseAiCard(hand, ctx) {
+  const d = ctx.difficulty ?? 1;
   const scored = hand.map((card, index) => ({
     index,
     power: cardPower(card, ctx.trump),
@@ -33,8 +40,17 @@ export function chooseAiCard(hand, ctx) {
   const worst = byKeep[0];
   const best = byKeep[byKeep.length - 1];
 
+  // Calm Vex drifts: a third of her rounds she simply plays whatever her
+  // fingers find first. Beatable — that is the point of an easy mode.
+  if (d === 0 && ctx.random() < 0.3) {
+    return Math.floor(ctx.random() * hand.length);
+  }
+
   // Desperate or far behind: swing with the best card whatever the prize.
-  if (ctx.aiLife <= 3 || ctx.playerLife - ctx.aiLife >= 6) return best.index;
+  // Ruthless Vex starts swinging earlier.
+  const desperateLife = d === 2 ? 4 : 3;
+  const desperateGap = d === 2 ? 4 : 6;
+  if (ctx.aiLife <= desperateLife || ctx.playerLife - ctx.aiLife >= desperateGap) return best.index;
 
   // A 1-gem round is a dumping ground — unless the worst card still wins often
   // (a mid trump), in which case take the cheap win.
@@ -46,9 +62,10 @@ export function chooseAiCard(hand, ctx) {
 
   // A 3-gem round deserves a real card: the cheapest one likely to win
   // (power 8+ beats most of a fresh hand), else the best card in hand.
-  if (ctx.prize >= 3) {
+  // Ruthless Vex fights this hard for 2-gem rounds too.
+  if (ctx.prize >= 3 || (d === 2 && ctx.prize >= 2)) {
     const enough = byKeep.find((s) => s.power >= 8);
-    if (enough && ctx.random() > 0.15) return enough.index;
+    if (enough && ctx.random() > (d === 2 ? 0.05 : 0.15)) return enough.index;
     return best.index;
   }
 
@@ -59,6 +76,38 @@ export function chooseAiCard(hand, ctx) {
   const echoCard = byKeep.find((s) => ctx.lastSigil !== null && hand[s.index].sigil === ctx.lastSigil);
   if (echoCard) return echoCard.index;
   return byKeep[Math.floor(ctx.random() * Math.min(3, byKeep.length))].index;
+}
+
+const BOASTS = [
+  'Vex: “This prize is mine. Walk away.”',
+  'Vex: “I like this hand. For you, that is bad news.”',
+  'Vex: “Watch closely — this one hurts.”',
+  'Vex: “The Moon is bright tonight. So is my card.”',
+];
+const DISMISSALS = [
+  'Vex: “A trifle of a round. Take it, if you can.”',
+  'Vex: “Even my scraps are pretty, no?”',
+  'Vex: “I barely looked at this one.”',
+  'Vex: “Yawn. Wake me for a real prize.”',
+];
+
+/**
+ * Vex commits to her card at the START of the round — she never sees yours —
+ * and she talks while she does it. Her table talk is a tell, not a promise:
+ * about 70% of the time it matches the strength of the card she picked
+ * (a boast means power 9+, a dismissal means she is dumping), and the rest
+ * of the time she is bluffing or baiting. Reading her is a real skill:
+ * fold your good cards into her boasts, steal her dismissals cheap.
+ * Returns { index, line, claim } — claim is what she WANTS you to believe.
+ */
+export function vexTell(hand, ctx) {
+  const index = chooseAiCard(hand, ctx);
+  const strong = cardPower(hand[index], ctx.trump) >= 9;
+  const honest = ctx.random() < 0.7;
+  const claim = honest === strong ? 'strong' : 'weak';
+  const lines = claim === 'strong' ? BOASTS : DISMISSALS;
+  const line = lines[Math.floor(ctx.random() * lines.length)];
+  return { index, line, claim };
 }
 
 /** One line of table talk that hints at what Vex just did, shown after a reveal. */
