@@ -6,6 +6,7 @@ import {
   AI_HAND_LAYOUT, DUEL_LAYOUT, FIELD, FONT, FONT_UI, HAND_LAYOUT, PALETTE, SIGILS, handStartX,
 } from './config.js';
 import { PHASE_CHOOSE, PHASE_OVER, PHASE_REVEAL, PHASE_TITLE } from './world.js';
+import { cardPower } from './ai.js';
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext('2d');
@@ -109,10 +110,10 @@ export function createRenderer(canvas) {
   function cardFace(card, x, y, w, h, isTrump) {
     const sigil = SIGILS[card.sigil];
     ctx.save();
-    if (isTrump) {
-      ctx.shadowColor = PALETTE.gem;
-      ctx.shadowBlur = 22;
-    }
+    // A soft drop shadow gives every card weight on the felt; trump cards glow gold instead.
+    ctx.shadowColor = isTrump ? PALETTE.gem : 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = isTrump ? 22 : 10;
+    ctx.shadowOffsetY = isTrump ? 0 : 4;
     roundRect(x, y, w, h, w * 0.09);
     const grad = ctx.createLinearGradient(x, y, x, y + h);
     grad.addColorStop(0, '#fffdf6');
@@ -120,6 +121,7 @@ export function createRenderer(canvas) {
     ctx.fillStyle = grad;
     ctx.fill();
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
     ctx.lineWidth = Math.max(2, w * 0.045);
     ctx.strokeStyle = isTrump ? PALETTE.gem : sigil.color;
     ctx.stroke();
@@ -258,6 +260,11 @@ export function createRenderer(canvas) {
 
   function drawDuel(state) {
     const { aiX, playerX, y, cardW, cardH } = DUEL_LAYOUT;
+    // Played cards slide in from their owners' sides and settle in the middle.
+    const slide = state.phase === PHASE_REVEAL ? Math.min(1, state.revealT / 0.35) : 1;
+    const ease = 1 - (1 - slide) * (1 - slide);
+    const playerY = y + (1 - ease) * 52;
+    const aiY = y - (1 - ease) * 52;
     // Between rounds the last duel stays on the table, faded, so the result
     // line below it has something to point at.
     if (!state.playerPlayed && state.phase === PHASE_CHOOSE && state.lastResult) {
@@ -268,23 +275,40 @@ export function createRenderer(canvas) {
       ctx.restore();
       text('LAST ROUND', 640, y - 18, 14, PALETTE.muted, 'center', FONT_UI, 'bold');
     }
-    if (state.playerPlayed) cardFace(state.playerPlayed, playerX, y, cardW, cardH, state.playerPlayed.sigil === state.trump);
+    if (state.playerPlayed) cardFace(state.playerPlayed, playerX, playerY, cardW, cardH, state.playerPlayed.sigil === state.trump);
     if (state.aiPlayed) {
       if (state.phase === PHASE_REVEAL) {
         const flip = Math.min(1, state.revealT / 0.55);
-        if (flip < 0.5) cardBack(aiX, y, cardW, cardH);
+        if (flip < 0.5) cardBack(aiX, aiY, cardW, cardH);
         else {
           ctx.save();
           const cx = aiX + cardW / 2;
           ctx.translate(cx, 0); ctx.scale(Math.abs(Math.cos(flip * Math.PI)) || 0.02, 1); ctx.translate(-cx, 0);
-          cardFace(state.aiPlayed, aiX, y, cardW, cardH, state.aiPlayed.sigil === state.trump);
+          cardFace(state.aiPlayed, aiX, aiY, cardW, cardH, state.aiPlayed.sigil === state.trump);
           ctx.restore();
         }
       } else {
-        cardFace(state.aiPlayed, aiX, y, cardW, cardH, state.aiPlayed.sigil === state.trump);
+        cardFace(state.aiPlayed, aiX, aiY, cardW, cardH, state.aiPlayed.sigil === state.trump);
       }
     }
     text('VS', 640, y + cardH / 2, 30, PALETTE.gem, 'center', FONT, 'bold');
+  }
+
+  /** The face-off in words, once Vex's card has landed: powers, trump and the Spark rule. */
+  function duelLine(state) {
+    const a = state.playerPlayed;
+    const b = state.aiPlayed;
+    if (!a || !b) return 'The cards are cast…';
+    const pa = cardPower(a, state.trump);
+    const pb = cardPower(b, state.trump);
+    const name = (c) => `${SIGILS[c.sigil].name} ${c.rank}${c.sigil === state.trump ? ' · TRUMP' : ''}`;
+    if (a.rank === 1 && b.rank === 9 && a.sigil !== state.trump && b.sigil !== state.trump) {
+      return `SPARK! Your ${name(a)} fells her giant ${name(b)}!`;
+    }
+    if (b.rank === 1 && a.rank === 9 && a.sigil !== state.trump && b.sigil !== state.trump) {
+      return `SPARK! Her ${name(b)} fells your giant ${name(a)}!`;
+    }
+    return `Your ${name(a)} — power ${pa}  ·  Vex's ${name(b)} — power ${pb}`;
   }
 
   function drawParticles(dt) {
@@ -344,11 +368,12 @@ export function createRenderer(canvas) {
       if (state.lastResult) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
       text('Click a card — or press 1–5, left to right — to duel for the prize.', 640, 702, 16, PALETTE.muted);
     } else if (state.phase === PHASE_REVEAL) {
-      text('The cards are cast…', 640, 470, 21, PALETTE.text);
+      text(state.revealT > 0.6 ? duelLine(state) : 'The cards are cast…', 640, 470, 21, PALETTE.text);
     }
 
     if (state.phase === PHASE_TITLE) {
       panel('SIGIL CLASH', [
+        'SUN · MOON · LEAF · TIDE — four sigils, one table.',
         'A duel of cards against Vex, the Moon Trickster.',
         'Beat her card to deal the prize as damage. Trump sigil: +10 power.',
         'A Spark (1) fells a Giant (9). Win twice with one sigil for an ECHO +1.',
