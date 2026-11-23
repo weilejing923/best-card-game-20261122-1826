@@ -47,6 +47,10 @@ function runShot(name) {
   if (name === 'play') renderer.burst(730, 345, 16);
   // The cover card gets its own small shower of sparks on the title screen.
   if (name === 'start') renderer.burst(200, 350, 10);
+  // Victory gets a celebration: gold bursts frozen just above the panel's
+  // top corners (particles paint before the panel, so on it would hide them).
+  // (Defeat gets none — the quiet table is the point there.)
+  if (name === 'win') { renderer.burst(265, 170, 13); renderer.burst(1015, 170, 13); }
   let painted = 0;
   function paint() {
     renderer.draw(world.state, { hover: name === 'play' ? 1 : -1, best: 2, dt: 0 });
