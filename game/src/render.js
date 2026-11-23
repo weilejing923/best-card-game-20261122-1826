@@ -500,6 +500,25 @@ export function createRenderer(canvas) {
       ctx.strokeStyle = PALETTE.gem;
       ctx.stroke();
       ctx.restore();
+      // A Spark — the 1 felling the 9 — gets a stamp on the winner's corner,
+      // so the screenshot tells the story before any caption does.
+      const winnerCard = verdict > 0 ? state.playerPlayed : state.aiPlayed;
+      const loserCard = verdict > 0 ? state.aiPlayed : state.playerPlayed;
+      const isSpark = winnerCard.rank === 1 && loserCard.rank === 9
+        && winnerCard.sigil !== state.trump && loserCard.sigil !== state.trump;
+      if (isSpark) {
+        ctx.save();
+        ctx.translate(wx + cardW - 4, wy - 4);
+        ctx.rotate(-0.16);
+        roundRect(-57, -16, 114, 32, 16);
+        ctx.fillStyle = PALETTE.gem;
+        ctx.fill();
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(90,55,0,0.65)';
+        ctx.stroke();
+        text('SPARK!', 0, 1, 19, '#4a3200', 'center', FONT_UI, 'bold');
+        ctx.restore();
+      }
     }
     text('VS', 640, y + cardH / 2, 30, PALETTE.gem, 'center', FONT, 'bold');
   }
