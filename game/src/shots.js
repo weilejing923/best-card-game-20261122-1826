@@ -18,14 +18,15 @@ export function stageShot(name, world) {
   const s = world.state;
   world.startMatch();
   if (name === 'play') {
-    // The duel moment itself: both cards face up in the middle, Vex's giant
-    // Sun 9 against the player's trump Moon 7 (power 17), a 3-gem prize on
-    // the line, both hands down to four cards.
+    // The duel moment itself — and the game's signature beat: the player's
+    // Moon 1 lands a SPARK on Vex's giant Sun 9 (neither is the Leaf trump,
+    // so the Spark rule, not power, decides it). A 3-gem prize is on the
+    // line, the Echo plaque is live, both hands down to four cards.
     dealSceneHands(world);
     s.phase = PHASE_REVEAL;
     s.revealT = 2;
     s.round = 4;
-    s.trump = 1; // Moon
+    s.trump = 2; // Leaf
     s.prize = 3;
     s.playerLife = 9;
     s.aiLife = 7;
@@ -33,7 +34,7 @@ export function stageShot(name, world) {
     s.aiGems = 3;
     s.lastSigil = 1;
     s.streak = 1; // Moon won the round before, so the Echo plaque is live
-    s.playerPlayed = makeCard(1, 7);
+    s.playerPlayed = makeCard(1, 1);
     s.aiPlayed = makeCard(0, 9);
     s.playerHand = [makeCard(0, 3), makeCard(1, 2), makeCard(2, 9), makeCard(3, 5)];
     s.aiHand = [makeCard(0, 8), makeCard(1, 4), makeCard(2, 2), makeCard(3, 9)];
