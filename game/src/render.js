@@ -523,6 +523,9 @@ export function createRenderer(canvas) {
     // spectacle at a fixed, tiny cost.
     const fxOn = state.phase === PHASE_REVEAL && state.revealT > 0.6 && state.playerPlayed && state.aiPlayed;
     const verdict = fxOn ? compareCards(state.playerPlayed, state.aiPlayed, state.trump) : 0;
+    const withTilt = (cx, cy, angle, fn) => {
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(angle); ctx.translate(-cx, -cy); fn(); ctx.restore();
+    };
     if (fxOn && verdict !== 0) {
       const wx = verdict > 0 ? playerX : aiX;
       const wy = verdict > 0 ? playerY : aiY;
@@ -540,8 +543,19 @@ export function createRenderer(canvas) {
         ctx.fill();
       }
       ctx.restore();
+      // A warm halo pools behind the winning card — the duel's spotlight.
+      const halo = ctx.createRadialGradient(wx + cardW / 2, wy + cardH / 2, 12, wx + cardW / 2, wy + cardH / 2, 195);
+      halo.addColorStop(0, 'rgba(255,212,84,0.40)');
+      halo.addColorStop(1, 'rgba(255,212,84,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(wx + cardW / 2 - 195, wy + cardH / 2 - 195, 390, 390);
     }
-    if (state.playerPlayed) cardFace(state.playerPlayed, playerX, playerY, cardW, cardH, state.playerPlayed.sigil === state.trump);
+    if (state.playerPlayed) {
+      // The losing card slumps a few degrees — beaten, not just darker.
+      if (fxOn && verdict < 0) withTilt(playerX + cardW / 2, playerY + cardH / 2, 0.055,
+        () => cardFace(state.playerPlayed, playerX, playerY, cardW, cardH, state.playerPlayed.sigil === state.trump));
+      else cardFace(state.playerPlayed, playerX, playerY, cardW, cardH, state.playerPlayed.sigil === state.trump);
+    }
     if (state.aiPlayed) {
       if (state.phase === PHASE_REVEAL) {
         const flip = Math.min(1, state.revealT / 0.55);
@@ -549,7 +563,11 @@ export function createRenderer(canvas) {
         else {
           ctx.save();
           const cx = aiX + cardW / 2;
-          ctx.translate(cx, 0); ctx.scale(Math.abs(Math.cos(flip * Math.PI)) || 0.02, 1); ctx.translate(-cx, 0);
+          const cy = aiY + cardH / 2;
+          ctx.translate(cx, cy);
+          if (fxOn && verdict > 0) ctx.rotate(-0.055);
+          ctx.scale(Math.abs(Math.cos(flip * Math.PI)) || 0.02, 1);
+          ctx.translate(-cx, -cy);
           cardFace(state.aiPlayed, aiX, aiY, cardW, cardH, state.aiPlayed.sigil === state.trump);
           ctx.restore();
         }
@@ -562,11 +580,20 @@ export function createRenderer(canvas) {
       const wy = verdict > 0 ? playerY : aiY;
       const lx = verdict > 0 ? aiX : playerX;
       const ly = verdict > 0 ? aiY : playerY;
-      // The loser, shadowed.
+      // The loser, shadowed — under the same slump as the card itself.
+      withTilt(lx + cardW / 2, ly + cardH / 2, verdict > 0 ? -0.055 : 0.055, () => {
+        roundRect(lx, ly, cardW, cardH, cardW * 0.09);
+        ctx.fillStyle = 'rgba(6,10,8,0.38)';
+        ctx.fill();
+      });
+      // The impact ring: a soft ellipse of light framing the whole duel.
       ctx.save();
-      roundRect(lx, ly, cardW, cardH, cardW * 0.09);
-      ctx.fillStyle = 'rgba(6,10,8,0.38)';
-      ctx.fill();
+      ctx.globalAlpha = 0.22;
+      ctx.beginPath();
+      ctx.ellipse(640, y + cardH / 2, 152 + 8 * Math.sin(clock * 3), 106 + 6 * Math.sin(clock * 3), 0, 0, Math.PI * 2);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = PALETTE.gem;
+      ctx.stroke();
       ctx.restore();
       // The winner, ringed in breathing gold.
       const grow = 5 + 2.2 * Math.sin(clock * 6);
