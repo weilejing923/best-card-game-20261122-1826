@@ -98,6 +98,13 @@ export function createRenderer(canvas) {
     ctx.bezierCurveTo(x + size * 0.55, y - size * 0.95, x + size * 1.15, y + size * 0.1, x, y + size * 0.9);
     ctx.fillStyle = filled ? PALETTE.heart : 'rgba(255,255,255,0.16)';
     ctx.fill();
+    if (filled) {
+      // a small gloss spot on the upper-left lobe — flat red reads cheap
+      ctx.beginPath();
+      ctx.ellipse(x - size * 0.38, y - size * 0.38, size * 0.22, size * 0.13, -0.6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.45)';
+      ctx.fill();
+    }
     ctx.restore();
   }
 
@@ -109,6 +116,15 @@ export function createRenderer(canvas) {
     ctx.fillRect(-size / 2, -size / 2, size, size);
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     ctx.fillRect(-size / 2, -size / 2, size / 2, size / 2);
+    // facet seams + a dark gold edge so the gem reads cut, not stamped
+    ctx.strokeStyle = 'rgba(122,84,0,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-size / 2, -size / 2, size, size);
+    ctx.beginPath();
+    ctx.moveTo(-size / 2, 0); ctx.lineTo(size / 2, 0);
+    ctx.moveTo(0, -size / 2); ctx.lineTo(0, size / 2);
+    ctx.strokeStyle = 'rgba(122,84,0,0.30)';
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -165,6 +181,22 @@ export function createRenderer(canvas) {
     ctx.lineWidth = Math.max(2, w * 0.045);
     ctx.strokeStyle = isTrump ? PALETTE.gem : sigil.color;
     ctx.stroke();
+    // Refinements, all baked into the sprite so they cost nothing per frame:
+    // a hairline inner frame in the sigil's own colour, and the sigil itself
+    // blown up faint behind the centre as a watermark.
+    ctx.save();
+    roundRect(x, y, w, h, w * 0.09);
+    ctx.clip();
+    ctx.globalAlpha = 0.05;
+    drawSigil(card.sigil, x + w / 2, y + h * 0.47, w * 0.44, sigil.deep);
+    ctx.globalAlpha = 1;
+    ctx.restore();
+    roundRect(x + 5, y + 5, w - 10, h - 10, w * 0.065);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = sigil.color;
+    ctx.globalAlpha = 0.38;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
     // rank, top-left and bottom-right
     text(String(card.rank), x + w * 0.2, y + h * 0.13, w * 0.3, sigil.deep, 'center', FONT, 'bold');
     ctx.save();
@@ -176,6 +208,17 @@ export function createRenderer(canvas) {
     text(sigil.name, x + w / 2, y + h * 0.76, w * 0.17, sigil.deep, 'center', FONT, 'bold');
     if (card.rank === 1) text('SPARK', x + w / 2, y + h * 0.885, w * 0.13, sigil.deep, 'center', FONT_UI, 'bold');
     if (isTrump) text('TRUMP', x + w / 2, y + h * 0.06, w * 0.12, '#9a6a00', 'center', FONT_UI, 'bold');
+    // a last breath of gloss across the top-left corner
+    ctx.save();
+    roundRect(x, y, w, h, w * 0.09);
+    ctx.clip();
+    const sheen = ctx.createLinearGradient(x, y, x + w * 0.75, y + h * 0.75);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.13)');
+    sheen.addColorStop(0.45, 'rgba(255,255,255,0)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = sheen;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
     ctx.restore();
   }
 
@@ -199,6 +242,16 @@ export function createRenderer(canvas) {
       ctx.beginPath(); ctx.moveTo(x + d, y); ctx.lineTo(x + d + h, y + h); ctx.stroke();
     }
     ctx.restore();
+    // gold hairline frame inside the rim, and a soft glow behind the moon seal
+    roundRect(x + 5, y + 5, w - 10, h - 10, w * 0.065);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(255,210,63,0.5)';
+    ctx.stroke();
+    const glow = ctx.createRadialGradient(x + w / 2, y + h / 2, 2, x + w / 2, y + h / 2, w * 0.34);
+    glow.addColorStop(0, 'rgba(255,210,63,0.20)');
+    glow.addColorStop(1, 'rgba(255,210,63,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(x, y, w, h);
     ctx.beginPath();
     ctx.arc(x + w / 2, y + h / 2, w * 0.21, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -261,6 +314,30 @@ export function createRenderer(canvas) {
     // deck stack, right of centre
     for (let i = 0; i < 3; i += 1) cardBack(1052 - i * 3, 300 - i * 3, 74, 104);
     text(`Deck ${state.deck.length}`, 1089, 428, 17, PALETTE.muted);
+  }
+
+  // Ambient gold dust drifting over the felt — fixed seeded positions, a
+  // slow twinkle from the frame clock. Twenty-six tiny arcs a frame is
+  // nearly free, and it keeps the table from ever looking frozen.
+  const MOTES = (() => {
+    let s = 1234567;
+    const rnd = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    return Array.from({ length: 26 }, () => ({
+      x: 60 + rnd() * 1160, y: 50 + rnd() * 620, r: 0.8 + rnd() * 1.5,
+      p: rnd() * Math.PI * 2, sp: 0.4 + rnd() * 0.7,
+    }));
+  })();
+
+  function drawMotes() {
+    ctx.save();
+    ctx.fillStyle = PALETTE.gem;
+    for (const m of MOTES) {
+      ctx.globalAlpha = 0.05 + 0.055 * (0.5 + 0.5 * Math.sin(clock * m.sp + m.p));
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
 
   function lifeRow(x, y, life, maxLife, alignRight) {
@@ -592,7 +669,22 @@ export function createRenderer(canvas) {
     ctx.lineWidth = 3;
     ctx.strokeStyle = accent;
     ctx.stroke();
-    text(title, FIELD.width / 2, y + 66, 54, accent, 'center', FONT, 'bold');
+    roundRect(x + 7, y + 7, w - 14, h - 14, 12);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = accent;
+    ctx.globalAlpha = 0.45;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // the title wears a vertical gradient instead of a flat fill (gold on the
+    // gold-accented panels; the defeat panel keeps its flat red)
+    let titleFill = accent;
+    if (accent === PALETTE.gem) {
+      titleFill = ctx.createLinearGradient(0, y + 24, 0, y + 78);
+      titleFill.addColorStop(0, '#ffe98a');
+      titleFill.addColorStop(0.55, accent);
+      titleFill.addColorStop(1, '#c8912a');
+    }
+    text(title, FIELD.width / 2, y + 66, 54, titleFill, 'center', FONT, 'bold');
     lines.forEach((line, i) => text(line, FIELD.width / 2, y + 128 + i * 36, 22, PALETTE.text));
     text(prompt, FIELD.width / 2, y + h - 38, 23, PALETTE.gem, 'center', FONT_UI, 'bold');
   }
@@ -606,6 +698,7 @@ export function createRenderer(canvas) {
     ctx.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
 
     drawTable(state);
+    drawMotes();
     drawHud(state, ui.best);
     drawAiHand(state);
     drawTrumpAndPrize(state);
