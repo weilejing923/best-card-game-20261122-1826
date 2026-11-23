@@ -15,6 +15,10 @@ export function createRenderer(canvas) {
   const view = { scale: 1, x: 0, y: 0 };
   const particles = [];
   let clock = 0; // seconds of animation time, for pulses and rotating rays
+  let shakeAmp = 0; // screen-shake amplitude in field px, decays per frame
+
+  /** Kick the table: the next frames render with a decaying random offset. */
+  function shake(amp) { shakeAmp = Math.max(shakeAmp, amp); }
   let bgCanvas = null; // the static table, painted once and blitted per frame
 
   function resize() {
@@ -722,7 +726,15 @@ export function createRenderer(canvas) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PALETTE.backdrop;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.setTransform(view.scale, 0, 0, view.scale, view.x, view.y);
+    // Screen shake: a sharp kick that melts away in about a quarter second.
+    let shX = 0;
+    let shY = 0;
+    if (shakeAmp > 0.25) {
+      shX = (Math.random() * 2 - 1) * shakeAmp;
+      shY = (Math.random() * 2 - 1) * shakeAmp * 0.7;
+      shakeAmp *= Math.exp(-10 * (ui.dt || 0.016));
+    } else shakeAmp = 0;
+    ctx.setTransform(view.scale, 0, 0, view.scale, view.x + shX * view.scale, view.y + shY * view.scale);
 
     drawTable(state);
     drawMotes();
@@ -779,5 +791,5 @@ export function createRenderer(canvas) {
 
   resize();
   window.addEventListener('resize', resize);
-  return { draw, burst };
+  return { draw, burst, shake };
 }
