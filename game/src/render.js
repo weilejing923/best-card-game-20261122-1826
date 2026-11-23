@@ -383,15 +383,15 @@ export function createRenderer(canvas) {
   function drawTrumpAndPrize(state) {
     const trump = SIGILS[state.trump];
     ctx.beginPath();
-    ctx.arc(150, 330, 62, 0, Math.PI * 2);
+    ctx.arc(196, 330, 62, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
     ctx.lineWidth = 4;
     ctx.strokeStyle = trump.color;
     ctx.stroke();
-    drawSigil(state.trump, 150, 318, 34, trump.color);
-    text('TRUMP', 150, 372, 15, PALETTE.muted, 'center', FONT_UI, 'bold');
-    text(trump.name, 150, 392, 19, trump.color, 'center', FONT, 'bold');
+    drawSigil(state.trump, 196, 314, 30, trump.color);
+    text('TRUMP', 196, 358, 13, PALETTE.muted, 'center', FONT_UI, 'bold');
+    text(trump.name, 196, 379, 18, trump.color, 'center', FONT, 'bold');
     // prize gems, top of the duel zone
     for (let i = 0; i < state.prize; i += 1) drawGem(606 + i * 37, 232, 20);
     text(`PRIZE ${state.prize}`, 640, 206, 19, PALETTE.gem, 'center', FONT_UI, 'bold');
@@ -555,7 +555,7 @@ export function createRenderer(canvas) {
     for (let i = 0; i < count; i += 1) {
       const a = Math.random() * Math.PI * 2;
       const speed = 90 + Math.random() * 220;
-      particles.push({ x, y, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 120, life: 0.7 + Math.random() * 0.6, size: 8 + Math.random() * 9 });
+      particles.push({ x: x + (Math.random() - 0.5) * 52, y: y + (Math.random() - 0.5) * 52, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed - 120, life: 0.7 + Math.random() * 0.6, size: 8 + Math.random() * 9 });
     }
   }
 
