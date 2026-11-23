@@ -1,8 +1,9 @@
 // The screenshot scenes behind ?shot=start|play|win|lose. Each one builds a
 // real match state with the game's own rules and cards — the play scene is a
-// genuine mid-match table (round 4, trump Moon, a 3-gem prize, both hands
-// dealt), and the win/lose scenes are settled matches — so what the camera
-// sees is what a player sees, never a mock-up.
+// genuine mid-match table (round 4, trump Leaf, a 3-gem prize, and the
+// signature Spark: the player's Moon 1 felling Vex's Sun 9), and the
+// win/lose scenes are settled matches — so what the camera sees is what a
+// player sees, never a mock-up.
 import { makeCard } from './deck.js';
 import { PHASE_OVER, PHASE_REVEAL, PHASE_TITLE } from './world.js';
 
