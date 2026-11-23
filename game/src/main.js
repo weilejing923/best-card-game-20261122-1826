@@ -128,6 +128,7 @@ function runGame() {
         const played = world.playCard(pick);
         if (played) {
           soundFlip();
+          renderer.shake(2.5); // a small thud as the cards hit the felt
           announce('Cards are cast. Vex reveals hers…');
         }
       }
@@ -143,6 +144,10 @@ function runGame() {
           if (result.outcome === 'player') { soundWin(); renderer.burst(700, 330, 12); }
           else if (result.outcome === 'ai') soundLose();
           else soundClash();
+          // The verdict lands with weight: the table kicks, harder for a
+          // bigger prize, hardest of all for a Spark felling a giant.
+          renderer.shake(6 + result.damage * 2 + (result.spark ? 5 : 0));
+          if (navigator.vibrate) { try { navigator.vibrate(25); } catch { /* no motor, no problem */ } }
           announce(resultLineFor(result));
         }
       }
