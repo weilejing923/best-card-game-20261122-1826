@@ -44,7 +44,7 @@ function saveBest(value) {
 function runShot(name) {
   stageShot(name, world);
   // The staged duel is frozen a breath after impact: a burst of gold, mid-air.
-  if (name === 'play') renderer.burst(730, 345, 16);
+  if (name === 'play') { renderer.burst(730, 345, 16); renderer.burst(640, 258, 9); }
   // The cover card gets its own small shower of sparks on the title screen.
   if (name === 'start') renderer.burst(200, 350, 10);
   // Victory gets a celebration: gold bursts frozen just above the panel's
