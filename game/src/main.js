@@ -43,6 +43,8 @@ function saveBest(value) {
 
 function runShot(name) {
   stageShot(name, world);
+  // The staged duel is frozen a breath after impact: a burst of gold, mid-air.
+  if (name === 'play') renderer.burst(730, 345, 16);
   let painted = 0;
   function paint() {
     renderer.draw(world.state, { hover: name === 'play' ? 1 : -1, best: 2, dt: 0 });
