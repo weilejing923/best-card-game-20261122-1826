@@ -5,13 +5,17 @@
 import {
   AI_HAND_LAYOUT, DUEL_LAYOUT, FIELD, FONT, FONT_UI, HAND_LAYOUT, PALETTE, SIGILS, handStartX,
 } from './config.js';
-import { PHASE_CHOOSE, PHASE_OVER, PHASE_REVEAL, PHASE_TITLE } from './world.js';
+import { PHASE_CHOOSE, PHASE_OVER, PHASE_REVEAL, PHASE_TITLE, compareCards } from './world.js';
 import { cardPower, DIFFICULTY_LABELS } from './ai.js';
 
 export function createRenderer(canvas) {
-  const ctx = canvas.getContext('2d');
+  // `ctx` is swapped for a sprite's context while a card is being painted
+  // into the cache (see cardFace below); every helper reads it live.
+  let ctx = canvas.getContext('2d');
   const view = { scale: 1, x: 0, y: 0 };
   const particles = [];
+  let clock = 0; // seconds of animation time, for pulses and rotating rays
+  let bgCanvas = null; // the static table, painted once and blitted per frame
 
   function resize() {
     const ratio = window.devicePixelRatio || 1;
@@ -43,45 +47,47 @@ export function createRenderer(canvas) {
   }
 
   // --- sigil glyphs, drawn with paths so they survive any font --------------
-  function drawSigil(sigil, cx, cy, r, color) {
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.lineWidth = Math.max(2, r * 0.16);
-    ctx.lineCap = 'round';
+  // `g` is the target context — the table's cached background paints its
+  // watermark sigils through here too.
+  function drawSigil(sigil, cx, cy, r, color, g = ctx) {
+    g.save();
+    g.strokeStyle = color;
+    g.fillStyle = color;
+    g.lineWidth = Math.max(2, r * 0.16);
+    g.lineCap = 'round';
     if (sigil === 0) { // SUN: disc and eight rays
-      ctx.beginPath(); ctx.arc(cx, cy, r * 0.52, 0, Math.PI * 2); ctx.fill();
+      g.beginPath(); g.arc(cx, cy, r * 0.52, 0, Math.PI * 2); g.fill();
       for (let i = 0; i < 8; i += 1) {
         const a = (i / 8) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(cx + Math.cos(a) * r * 0.68, cy + Math.sin(a) * r * 0.68);
-        ctx.lineTo(cx + Math.cos(a) * r * 0.95, cy + Math.sin(a) * r * 0.95);
-        ctx.stroke();
+        g.beginPath();
+        g.moveTo(cx + Math.cos(a) * r * 0.68, cy + Math.sin(a) * r * 0.68);
+        g.lineTo(cx + Math.cos(a) * r * 0.95, cy + Math.sin(a) * r * 0.95);
+        g.stroke();
       }
     } else if (sigil === 1) { // MOON: a crescent — outer disc minus an offset inner disc (even-odd fill)
-      ctx.beginPath();
-      ctx.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
-      ctx.arc(cx + r * 0.44, cy - r * 0.24, r * 0.6, 0, Math.PI * 2);
-      ctx.fill('evenodd');
+      g.beginPath();
+      g.arc(cx, cy, r * 0.8, 0, Math.PI * 2);
+      g.arc(cx + r * 0.44, cy - r * 0.24, r * 0.6, 0, Math.PI * 2);
+      g.fill('evenodd');
     } else if (sigil === 2) { // LEAF: two arcs and a stem
-      ctx.beginPath();
-      ctx.moveTo(cx - r * 0.7, cy + r * 0.7);
-      ctx.quadraticCurveTo(cx - r * 0.75, cy - r * 0.6, cx + r * 0.65, cy - r * 0.7);
-      ctx.quadraticCurveTo(cx + r * 0.7, cy + r * 0.6, cx - r * 0.7, cy + r * 0.7);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath(); ctx.moveTo(cx - r * 0.55, cy + r * 0.55); ctx.lineTo(cx + r * 0.45, cy - r * 0.5); ctx.stroke();
+      g.beginPath();
+      g.moveTo(cx - r * 0.7, cy + r * 0.7);
+      g.quadraticCurveTo(cx - r * 0.75, cy - r * 0.6, cx + r * 0.65, cy - r * 0.7);
+      g.quadraticCurveTo(cx + r * 0.7, cy + r * 0.6, cx - r * 0.7, cy + r * 0.7);
+      g.fill();
+      g.strokeStyle = 'rgba(0,0,0,0.25)';
+      g.beginPath(); g.moveTo(cx - r * 0.55, cy + r * 0.55); g.lineTo(cx + r * 0.45, cy - r * 0.5); g.stroke();
     } else { // TIDE: three stacked waves
       for (let row = -1; row <= 1; row += 1) {
         const yy = cy + row * r * 0.42;
-        ctx.beginPath();
-        ctx.moveTo(cx - r * 0.85, yy);
-        ctx.bezierCurveTo(cx - r * 0.4, yy - r * 0.34, cx - r * 0.1, yy + r * 0.34, cx + r * 0.3, yy);
-        ctx.bezierCurveTo(cx + r * 0.55, yy - r * 0.24, cx + r * 0.7, yy - r * 0.1, cx + r * 0.85, yy);
-        ctx.stroke();
+        g.beginPath();
+        g.moveTo(cx - r * 0.85, yy);
+        g.bezierCurveTo(cx - r * 0.4, yy - r * 0.34, cx - r * 0.1, yy + r * 0.34, cx + r * 0.3, yy);
+        g.bezierCurveTo(cx + r * 0.55, yy - r * 0.24, cx + r * 0.7, yy - r * 0.1, cx + r * 0.85, yy);
+        g.stroke();
       }
     }
-    ctx.restore();
+    g.restore();
   }
 
   function drawHeart(x, y, size, filled) {
@@ -107,7 +113,41 @@ export function createRenderer(canvas) {
   }
 
   // --- cards -----------------------------------------------------------------
+  // Card art is painted ONCE per (sigil, rank, trump, size) into a sprite
+  // cache — shadow blur and gradients are the most expensive things a 2D
+  // canvas does, and a match only ever shows 36 distinct faces. Every frame
+  // after the first is a drawImage per card, so the richer the table gets,
+  // the frame cost stays flat.
+  const spriteCache = new Map();
+  const SPRITE_PAD = 30; // room for the shadow / trump glow around the card
+
+  function paintInto(key, w, h, paint) {
+    let sprite = spriteCache.get(key);
+    if (sprite) return sprite;
+    sprite = document.createElement('canvas');
+    sprite.width = w + SPRITE_PAD * 2;
+    sprite.height = h + SPRITE_PAD * 2;
+    const home = ctx;
+    ctx = sprite.getContext('2d');
+    paint(SPRITE_PAD, SPRITE_PAD);
+    ctx = home;
+    spriteCache.set(key, sprite);
+    return sprite;
+  }
+
   function cardFace(card, x, y, w, h, isTrump) {
+    const key = `face|${card.sigil}|${card.rank}|${isTrump ? 1 : 0}|${w}x${h}`;
+    const sprite = paintInto(key, w, h, (px, py) => paintCardFace(card, px, py, w, h, isTrump));
+    ctx.drawImage(sprite, x - SPRITE_PAD, y - SPRITE_PAD);
+  }
+
+  function cardBack(x, y, w, h) {
+    const key = `back|${w}x${h}`;
+    const sprite = paintInto(key, w, h, (px, py) => paintCardBack(px, py, w, h));
+    ctx.drawImage(sprite, x - SPRITE_PAD, y - SPRITE_PAD);
+  }
+
+  function paintCardFace(card, x, y, w, h, isTrump) {
     const sigil = SIGILS[card.sigil];
     ctx.save();
     // A soft drop shadow gives every card weight on the felt; trump cards glow gold instead.
@@ -139,7 +179,7 @@ export function createRenderer(canvas) {
     ctx.restore();
   }
 
-  function cardBack(x, y, w, h) {
+  function paintCardBack(x, y, w, h) {
     ctx.save();
     roundRect(x, y, w, h, w * 0.09);
     const grad = ctx.createLinearGradient(x, y, x + w, y + h);
@@ -171,22 +211,53 @@ export function createRenderer(canvas) {
   }
 
   // --- table furniture ---------------------------------------------------------
-  function drawTable(state) {
-    const grad = ctx.createRadialGradient(640, 350, 120, 640, 360, 760);
+  /**
+   * The static table, painted once into an offscreen canvas: layered felt,
+   * four giant watermark sigils in the corners, gold rings and a vignette.
+   * Per frame it costs a single drawImage, however rich it gets — that is
+   * how the visuals go up without the frame rate coming down.
+   */
+  function buildBackground() {
+    bgCanvas = document.createElement('canvas');
+    bgCanvas.width = FIELD.width;
+    bgCanvas.height = FIELD.height;
+    const g = bgCanvas.getContext('2d');
+    const grad = g.createRadialGradient(640, 350, 120, 640, 360, 760);
     grad.addColorStop(0, PALETTE.feltInner);
     grad.addColorStop(1, PALETTE.feltOuter);
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, FIELD.width, FIELD.height);
-    ctx.beginPath();
-    ctx.ellipse(640, 356, 520, 252, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = PALETTE.feltRing;
-    ctx.lineWidth = 5;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(640, 356, 486, 224, 0, 0, Math.PI * 2);
-    ctx.strokeStyle = 'rgba(201,162,39,0.35)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    g.fillStyle = grad;
+    g.fillRect(0, 0, FIELD.width, FIELD.height);
+    // Watermark sigils, barely-there, one per corner.
+    const marks = [[0, 208, 168], [1, 1072, 168], [2, 208, 552], [3, 1072, 552]];
+    for (const [sigil, x, y] of marks) {
+      g.globalAlpha = 0.05;
+      drawSigil(sigil, x, y, 96, SIGILS[sigil].color, g);
+    }
+    g.globalAlpha = 1;
+    // A lighter pool of felt inside the ring.
+    g.beginPath();
+    g.ellipse(640, 356, 520, 252, 0, 0, Math.PI * 2);
+    g.fillStyle = 'rgba(255,255,240,0.045)';
+    g.fill();
+    g.strokeStyle = PALETTE.feltRing;
+    g.lineWidth = 5;
+    g.stroke();
+    g.beginPath();
+    g.ellipse(640, 356, 486, 224, 0, 0, Math.PI * 2);
+    g.strokeStyle = 'rgba(201,162,39,0.35)';
+    g.lineWidth = 2;
+    g.stroke();
+    // Vignette: darken the corners so the table glows in the middle.
+    const shade = g.createRadialGradient(640, 360, 380, 640, 360, 900);
+    shade.addColorStop(0, 'rgba(0,0,0,0)');
+    shade.addColorStop(1, 'rgba(0,0,0,0.34)');
+    g.fillStyle = shade;
+    g.fillRect(0, 0, FIELD.width, FIELD.height);
+  }
+
+  function drawTable(state) {
+    if (!bgCanvas) buildBackground();
+    ctx.drawImage(bgCanvas, 0, 0);
     // deck stack, right of centre
     for (let i = 0; i < 3; i += 1) cardBack(1052 - i * 3, 300 - i * 3, 74, 104);
     text(`Deck ${state.deck.length}`, 1089, 428, 17, PALETTE.muted);
@@ -369,6 +440,30 @@ export function createRenderer(canvas) {
       ctx.restore();
       text('LAST ROUND', 640, y - 18, 14, PALETTE.muted, 'center', FONT_UI, 'bold');
     }
+    // Once the flip lands, the duel reads itself: golden rays turn slowly
+    // behind the winning card, a light-ring breathes around it, and the
+    // losing card falls into shadow. Twelve triangles and two round-rects —
+    // spectacle at a fixed, tiny cost.
+    const fxOn = state.phase === PHASE_REVEAL && state.revealT > 0.6 && state.playerPlayed && state.aiPlayed;
+    const verdict = fxOn ? compareCards(state.playerPlayed, state.aiPlayed, state.trump) : 0;
+    if (fxOn && verdict !== 0) {
+      const wx = verdict > 0 ? playerX : aiX;
+      const wy = verdict > 0 ? playerY : aiY;
+      ctx.save();
+      ctx.translate(wx + cardW / 2, wy + cardH / 2);
+      ctx.rotate((clock * 0.25) % (Math.PI / 6));
+      ctx.fillStyle = 'rgba(244,197,66,0.10)';
+      for (let i = 0; i < 12; i += 1) {
+        ctx.rotate(Math.PI / 6);
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(178, -13);
+        ctx.lineTo(178, 13);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.restore();
+    }
     if (state.playerPlayed) cardFace(state.playerPlayed, playerX, playerY, cardW, cardH, state.playerPlayed.sigil === state.trump);
     if (state.aiPlayed) {
       if (state.phase === PHASE_REVEAL) {
@@ -384,6 +479,27 @@ export function createRenderer(canvas) {
       } else {
         cardFace(state.aiPlayed, aiX, aiY, cardW, cardH, state.aiPlayed.sigil === state.trump);
       }
+    }
+    if (fxOn && verdict !== 0) {
+      const wx = verdict > 0 ? playerX : aiX;
+      const wy = verdict > 0 ? playerY : aiY;
+      const lx = verdict > 0 ? aiX : playerX;
+      const ly = verdict > 0 ? aiY : playerY;
+      // The loser, shadowed.
+      ctx.save();
+      roundRect(lx, ly, cardW, cardH, cardW * 0.09);
+      ctx.fillStyle = 'rgba(6,10,8,0.38)';
+      ctx.fill();
+      ctx.restore();
+      // The winner, ringed in breathing gold.
+      const grow = 5 + 2.2 * Math.sin(clock * 6);
+      ctx.save();
+      ctx.globalAlpha = 0.55 + 0.3 * Math.sin(clock * 6);
+      roundRect(wx - grow, wy - grow, cardW + grow * 2, cardH + grow * 2, cardW * 0.11);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = PALETTE.gem;
+      ctx.stroke();
+      ctx.restore();
     }
     text('VS', 640, y + cardH / 2, 30, PALETTE.gem, 'center', FONT, 'bold');
   }
@@ -464,6 +580,7 @@ export function createRenderer(canvas) {
 
   /** Paint one frame. `ui`: { hover, best, dt } */
   function draw(state, ui) {
+    clock += ui.dt || 0;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.fillStyle = PALETTE.backdrop;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
