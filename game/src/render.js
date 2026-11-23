@@ -616,11 +616,22 @@ export function createRenderer(canvas) {
     drawParticles(ui.dt || 0);
 
     if (state.phase === PHASE_CHOOSE) {
-      text(resultLine(state), 640, 462, 21, PALETTE.text);
-      // Her table talk for THIS round outranks last round's quip: it is a tell
-      // about the card she has already committed to (about 70% honest).
-      if (state.vexTell) text(state.vexTell, 640, 490, 17, PALETTE.gem);
-      else if (state.lastResult && !echoLabel(state)) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
+      // Two text lines share the band above the hand (462 and 490), and the
+      // Echo plaque owns the 490 line whenever it is live — so on an Echo
+      // round her tell takes the 462 line instead of colliding with the
+      // plaque. (Her quip was already suppressed then; the tell is not,
+      // because the tell is information the player is meant to act on.)
+      if (echoLabel(state)) {
+        if (state.vexTell) text(state.vexTell, 640, 462, 17, PALETTE.gem);
+        else if (state.lastResult) text(state.lastResult.quip, 640, 462, 17, PALETTE.muted);
+        else text(resultLine(state), 640, 462, 21, PALETTE.text);
+      } else {
+        text(resultLine(state), 640, 462, 21, PALETTE.text);
+        // Her table talk for THIS round outranks last round's quip: it is a
+        // tell about the card she has already committed to (~70% honest).
+        if (state.vexTell) text(state.vexTell, 640, 490, 17, PALETTE.gem);
+        else if (state.lastResult) text(state.lastResult.quip, 640, 490, 17, PALETTE.muted);
+      }
       text('Click a card — or press 1–5, left to right — to duel for the prize.', 640, 702, 16, PALETTE.muted);
     } else if (state.phase === PHASE_REVEAL) {
       text(state.revealT > 0.6 ? duelLine(state) : 'The cards are cast…', 640, 470, 21, PALETTE.text);
